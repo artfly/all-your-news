@@ -6,6 +6,7 @@ from google.appengine.ext import ndb
 from google.appengine.api import urlfetch
 import ast
 import json
+import base64
 import logging
 
 
@@ -38,12 +39,17 @@ class TokenDB(ndb.Model):
 @module_api.api_class(resource_name='users')
 class UsersApi(remote.Service):
 	"""Users API v1"""
+	CLIENT_ID = 'LFBR3WSQCrOt6g'
+	CLIENT_SECRET = 'H35OVobtd4K0YKIl8StDffr4jm0'
 
 	SOURCES_METHOD_RESOURCE = endpoints.ResourceContainer(Token, userid=messages.IntegerField(2, required=True))
+
 
 	@endpoints.method(SOURCES_METHOD_RESOURCE, EmptyMessage,
 						path='users/{userid}/tokens', http_method='POST', name='postSource')
 	def post_token(self, request):
+		logging.info('hi!')
+		logging.info(str(request.token))
 		token = ast.literal_eval(request.token)
 		if 'access_token' in token and 'refresh_token' in token:
 			access_token = token['access_token']
@@ -84,14 +90,27 @@ class UsersApi(remote.Service):
 			url = url + "?limit={}&after={}".format('100', after)
 			posts = urlfetch.fetch(url=url, headers=headers, method=urlfetch.GET).content
 			# logging.info(posts)
-			posts = json.loads(posts)															#TODO : refresh_token
+			posts = json.loads(posts)
+			if 'data' not in posts:
+				oauth_url = 'https://www.reddit.com/api/v1/access_token'
+				payload = 'grant_type=refresh_token&refresh_token={}'.format(db_token.refresh_token)
+				headers={"Authorization": "Basic %s" % base64.b64encode("{}:{}".format(self.CLIENT_ID, self.CLIENT_SECRET))}
+				new_token = urlfetch.fetch(url=oauth_url, headers=headers,
+											method=urlfetch.POST, payload=payload).content
+				logging.info(new_token)
+				new_token = json.loads(new_token)
+				db_token.access_token = new_token['access_token']
+				db_token.put()
+				headers = {"Authorization" : "bearer " + db_token.access_token}
+				posts = urlfetch.fetch(url=url, headers=headers, method=urlfetch.GET).content								
+				posts = json.loads(posts)
 			# posts = self.r.request_json(url='https://oauth.reddit.com/', params={'limit' : '100', 'after' : after})
 			if offset < 100 * (i + 1):
 				to = (lastpost + 1) if lastpost < 100 else 100
 				for j in range(offset % 100, to):
-					post = posts['data']['children'][j]
-					logging.info(str(post))
+					post = posts['data']['children'][j]							#TODO check errors
 					data.append(News(content=str(post), time=str(post['data']['created']), source='reddit'))
+					logging.info(str(post['data']['created']))
 				offset = 0
 			lastpost -= 100
 			after = posts['data']['after']

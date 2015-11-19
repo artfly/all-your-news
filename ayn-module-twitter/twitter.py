@@ -23,7 +23,7 @@ class Token(messages.Message):
 
 class News(messages.Message):
 	source = messages.StringField(1)
-	time = messages.FloatField(2)
+	time = messages.StringField(2)
 	content = messages.StringField(3)
 
 
@@ -93,8 +93,7 @@ class UsersApi(remote.Service):
 			tweets = json.loads(content)
 			returned_posts = len(tweets)
 			if 'errors' in tweets:
-				break
-			logging.info(str(tweets))															
+				break															
 			# posts = self.r.request_json(url='https://oauth.reddit.com/', params={'limit' : '100', 'after' : after})
 			if offset < returned_posts * (i + 1):
 				to = (lastpost + 1) if lastpost < returned_posts else returned_posts
@@ -103,10 +102,10 @@ class UsersApi(remote.Service):
 					logging.info(str(tweet))
 					time = parser.parse(tweet['created_at'])
 					time = time.replace(tzinfo=None)
-					data.append(News(content=str(tweet), time=(time - datetime(1970,1,1)).total_seconds(), source='twitter'))
+					data.append(News(content=str(tweet), time=str((time - datetime(1970,1,1)).total_seconds()), source='twitter'))
+					logging.info(str((time - datetime(1970,1,1)).total_seconds()))
 				offset = 0
 			lastpost -= returned_posts
-			logging.info(len(tweets))
 			max_id = tweets[returned_posts - 1]['id']
 		return NewsCollection(feed=data)
 

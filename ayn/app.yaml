@@ -14,3 +14,6 @@ libraries:
   version: latest
 - name: endpoints
   version: 1.0
+
+env_variables:
+  GAE_USE_SOCKETS_HTTPLIB : 'anyvalue'
