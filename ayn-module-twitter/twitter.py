@@ -1,6 +1,6 @@
 import sys
 sys.path.insert(0, 'libs')
-import oauth2
+import tweepy
 from datetime import datetime
 from dateutil import parser
 import endpoints
@@ -8,7 +8,6 @@ from protorpc import messages
 from protorpc import message_types
 from protorpc import remote
 from google.appengine.ext import ndb
-from google.appengine.api import urlfetch
 import ast
 import json
 import logging
@@ -76,37 +75,33 @@ class UsersApi(remote.Service):
 		db_token = TokenDB.get_by_id(request.userid)
 		if db_token is None:
 			raise endpoints.BadRequestException("No such user")
-		url =  'https://api.twitter.com/1.1/statuses/home_timeline.json'
 		token = (db_token.token_key, db_token.token_secret)
 		offset = db_token.offset
 		count = request.count
 		max_id = ''
-		consumer = oauth2.Consumer(key=self.CONSUMER_KEY, secret=self.CONSUMER_SECRET) 
-		client = oauth2.Client(consumer, oauth2.Token(key=db_token.token_key, secret=db_token.token_secret))
 		lastpost = count + offset - 1
 		iterations = int(lastpost / 200) + 1
+		returned_posts = 0
 		data = []
+		auth = tweepy.OAuthHandler(self.CONSUMER_KEY, self.CONSUMER_SECRET)
+		auth.set_access_token(token[0], token[1])
+		api = tweepy.API(auth)
 
-		for i in range(0, iterations):
-			body = 'count=200'
-			resp, content = client.request(url, method='GET', body=body, headers=None)
-			tweets = json.loads(content)
-			returned_posts = len(tweets)
-			if 'errors' in tweets:
-				break															
-			# posts = self.r.request_json(url='https://oauth.reddit.com/', params={'limit' : '100', 'after' : after})
-			if offset < returned_posts * (i + 1):
-				to = (lastpost + 1) if lastpost < returned_posts else returned_posts
-				for j in range(offset % returned_posts, to):
+		while True:
+			tweets = api.home_timeline(count=200, max_id=max_id)
+			returned_posts += len(tweets)															
+			if offset < returned_posts:
+				to =  (lastpost + 1) % len(tweets) if lastpost < returned_posts else len(tweets)
+				for j in range(offset % len(tweets), to):
 					tweet = tweets[j]
-					logging.info(str(tweet))
-					time = parser.parse(tweet['created_at'])
+					time = parser.parse(tweet.created_at)
+					# logging.info(time)
 					time = time.replace(tzinfo=None)
-					data.append(News(content=str(tweet), time=str((time - datetime(1970,1,1)).total_seconds()), source='twitter'))
-					logging.info(str((time - datetime(1970,1,1)).total_seconds()))
+					data.append(News(content=str(vars(tweet)), time=str((time - datetime(1970,1,1)).total_seconds()), source='twitter'))
 				offset = 0
-			lastpost -= returned_posts
-			max_id = tweets[returned_posts - 1]['id']
+				if lastpost < returned_posts:
+					break
+			max_id = tweets.max_id
 		return NewsCollection(feed=data)
 
 

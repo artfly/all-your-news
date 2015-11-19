@@ -48,8 +48,6 @@ class UsersApi(remote.Service):
 	@endpoints.method(SOURCES_METHOD_RESOURCE, EmptyMessage,
 						path='users/{userid}/tokens', http_method='POST', name='postSource')
 	def post_token(self, request):
-		logging.info('hi!')
-		logging.info(str(request.token))
 		token = ast.literal_eval(request.token)
 		if 'access_token' in token and 'refresh_token' in token:
 			access_token = token['access_token']
@@ -65,6 +63,19 @@ class UsersApi(remote.Service):
 		return EmptyMessage() 
 
 
+	def refresh(self, db_token):
+		oauth_url = 'https://www.reddit.com/api/v1/access_token'
+		payload = 'grant_type=refresh_token&refresh_token={}'.format(db_token.refresh_token)
+		headers={"Authorization": "Basic %s" % base64.b64encode("{}:{}".format(self.CLIENT_ID, self.CLIENT_SECRET))}
+		new_token = urlfetch.fetch(url=oauth_url, headers=headers,
+									method=urlfetch.POST, payload=payload).content
+		new_token = json.loads(new_token)
+		if 'access_token' in new_token:
+			db_token.access_token = new_token['access_token']
+			db_token.put()
+			return new_token['access_token']
+		return None
+
 	NEWS_METHOD_RESOURCE = endpoints.ResourceContainer(
 								userid=messages.IntegerField(1, required=True), count=messages.IntegerField(2, required=True))
 
@@ -78,9 +89,6 @@ class UsersApi(remote.Service):
 		offset = db_token.offset
 		headers = {"Authorization" : "bearer " + db_token.access_token}
 		url = "https://oauth.reddit.com/.json"
-		# result = urlfetch.fetch(url=url, headers=headers, method=urlfetch.GET)
-		# logging.info(result.content)
-		# return EmptyMessage()
 		lastpost = count + offset - 1
 		iterations = int(lastpost / 100) + 1
 		after = ''
@@ -89,28 +97,21 @@ class UsersApi(remote.Service):
 		for i in range(0, iterations):
 			url = url + "?limit={}&after={}".format('100', after)
 			posts = urlfetch.fetch(url=url, headers=headers, method=urlfetch.GET).content
-			# logging.info(posts)
 			posts = json.loads(posts)
+			#if request failed
 			if 'data' not in posts:
-				oauth_url = 'https://www.reddit.com/api/v1/access_token'
-				payload = 'grant_type=refresh_token&refresh_token={}'.format(db_token.refresh_token)
-				headers={"Authorization": "Basic %s" % base64.b64encode("{}:{}".format(self.CLIENT_ID, self.CLIENT_SECRET))}
-				new_token = urlfetch.fetch(url=oauth_url, headers=headers,
-											method=urlfetch.POST, payload=payload).content
-				logging.info(new_token)
-				new_token = json.loads(new_token)
-				db_token.access_token = new_token['access_token']
-				db_token.put()
-				headers = {"Authorization" : "bearer " + db_token.access_token}
+				access_token = self.refresh(db_token)
+				if access_token is None:
+					break
+				headers = {"Authorization" : "bearer " + access_token}
 				posts = urlfetch.fetch(url=url, headers=headers, method=urlfetch.GET).content								
 				posts = json.loads(posts)
-			# posts = self.r.request_json(url='https://oauth.reddit.com/', params={'limit' : '100', 'after' : after})
+
 			if offset < 100 * (i + 1):
 				to = (lastpost + 1) if lastpost < 100 else 100
 				for j in range(offset % 100, to):
-					post = posts['data']['children'][j]							#TODO check errors
+					post = posts['data']['children'][j]
 					data.append(News(content=str(post), time=str(post['data']['created']), source='reddit'))
-					logging.info(str(post['data']['created']))
 				offset = 0
 			lastpost -= 100
 			after = posts['data']['after']

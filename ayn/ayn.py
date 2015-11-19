@@ -108,17 +108,16 @@ class UsersApi(remote.Service):
 		factory = module.ModuleFactory()
 		news_collection = NewsCollection(feed=[])
 		items = []
+		offsets = {}
 		for source in user.sources:
+			# offsets['source'] = 0
 			feed = factory.get_news(source, request.userid, request.count, request.offset)
 			items.extend(feed)
-		# logging.info(items[0])
 		items = sorted(items, key=itemgetter('time'), reverse=True)
-		logging.info(items[22])
 		items = items[:request.count]
 		for news in items:
-			# logging.info(news['source'])
-			# logging.info(news['content'])
 			n = News(source=news['source'], content=str(news['content']))
+			# offsets[n.source] += 1
 			news_collection.feed.append(n)
 		return news_collection
 
