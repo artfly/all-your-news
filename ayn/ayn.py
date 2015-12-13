@@ -57,6 +57,7 @@ class User(ndb.Model):
 @ayn_api.api_class(resource_name='users')
 class UsersApi(remote.Service):
 	"""Users API v1"""
+	# factory = None
 
 	USER_METHOD_RESOURCE = endpoints.ResourceContainer(Token)
 
@@ -64,10 +65,10 @@ class UsersApi(remote.Service):
 						path='users', http_method='POST', name='postUser')
 	def post_user(self, request):
 		token = TokenModel(source=request.source, token=request.token)
-		user = User.query(User.token == token).get()
+		user = User.query(User.token.token == token.token).get()
 		if user is None:
 			user = User(password=pwd.mkpassword(), token=token)
-			user_key = user.put()
+		user_key = user.put()
 		return UserMessage(userid=user_key.integer_id(), password=user.password)
 
 	SOURCES_METHOD_RESOURCE = endpoints.ResourceContainer(Token, userid=messages.IntegerField(2, required=True))
@@ -88,8 +89,8 @@ class UsersApi(remote.Service):
 		factory.post_token(request.source, request.token, request.userid)
 		if user.sources != request.source:
 			logging.info(user.sources)
-			logging.info(request.so)
-			user.source.append(request.source)
+			logging.info(request.source)
+			user.sources.append(request.source)
 		user.put()
 		return EmptyMessage()
 
@@ -110,15 +111,16 @@ class UsersApi(remote.Service):
 		items = []
 		offsets = {}
 		for source in user.sources:
-			# offsets['source'] = 0
+			offsets[source] = 0
 			feed = factory.get_news(source, request.userid, request.count, request.offset)
 			items.extend(feed)
 		items = sorted(items, key=itemgetter('time'), reverse=True)
 		items = items[:request.count]
 		for news in items:
 			n = News(source=news['source'], content=str(news['content']))
-			# offsets[n.source] += 1
+			offsets[n.source] += 1
 			news_collection.feed.append(n)
+		# for source in user.sources:
 		return news_collection
 
 APPLICATION = endpoints.api_server([UsersApi])

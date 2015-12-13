@@ -1,6 +1,7 @@
 import logging
 from google.appengine.api import urlfetch
 import json
+import endpoints
 
 class ModuleFactory:
 	class __ModuleFactory:
@@ -14,16 +15,17 @@ class ModuleFactory:
 		if not ModuleFactory.instance:
 			ModuleFactory.instance = ModuleFactory.__ModuleFactory()
 
-	# def register_module(self, source, module):
-	# 	logging.info('register')
-	# 	self.modules[source] = module
 
 	def get_news(self, source, userid, count, offset):
 		logging.info(source)
-		if source.source in self.modules.keys():
-			url = self.modules[source.source] + '/_ah/api/module/v1/users/{}/news?count={}'.format(userid, count)
+		if source in self.modules.keys():
+			url = self.modules[source] + '/_ah/api/module/v1/users/{}/news?count={}'.format(userid, count)
 			content = json.loads(urlfetch.fetch(url=url, method=urlfetch.GET).content)
 			# logging.info(str(content))
+			try:
+				feed = content['feed']
+			except KeyError:
+				raise endpoints.BadRequestException(content['error']['message'])
 			return content['feed']
 
 
@@ -34,3 +36,6 @@ class ModuleFactory:
 			# logging.info(str(payload))
 			headers = {'Content-Type': 'application/json'}
 			urlfetch.fetch(url=url, payload=json.dumps(payload), method=urlfetch.POST,headers=headers)
+
+
+	# def post_offset(self, source, userid, offset):				#TODO

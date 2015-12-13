@@ -43,8 +43,8 @@ class TokenDB(ndb.Model):
 class UsersApi(remote.Service):
 	"""Users API v1"""
 
-	CONSUMER_KEY = 'FQhc0HUHu6eDymxbrls4lUDKL'
-	CONSUMER_SECRET = 'rzmoEgKvhgsdGX6zgwodLH7YUyG6odrgOHZnQxkC5Bwo0hVKZi'
+	CONSUMER_KEY = 'pjBmdH8twx7RKX91CyBosaZOo'
+	CONSUMER_SECRET = 'UO7kzSoaGMflKsLWtolzmud7iSJRS0cyW0U3ID5ytmpdTSJl2f'
 
 	SOURCES_METHOD_RESOURCE = endpoints.ResourceContainer(Token, userid=messages.IntegerField(2, required=True))
 
@@ -78,7 +78,7 @@ class UsersApi(remote.Service):
 		token = (db_token.token_key, db_token.token_secret)
 		offset = db_token.offset
 		count = request.count
-		max_id = ''
+		max_id = None
 		lastpost = count + offset - 1
 		iterations = int(lastpost / 200) + 1
 		returned_posts = 0
@@ -86,22 +86,27 @@ class UsersApi(remote.Service):
 		auth = tweepy.OAuthHandler(self.CONSUMER_KEY, self.CONSUMER_SECRET)
 		auth.set_access_token(token[0], token[1])
 		api = tweepy.API(auth)
-
-		while True:
-			tweets = api.home_timeline(count=200, max_id=max_id)
-			returned_posts += len(tweets)															
-			if offset < returned_posts:
-				to =  (lastpost + 1) % len(tweets) if lastpost < returned_posts else len(tweets)
-				for j in range(offset % len(tweets), to):
-					tweet = tweets[j]
-					time = parser.parse(tweet.created_at)
-					# logging.info(time)
-					time = time.replace(tzinfo=None)
-					data.append(News(content=str(vars(tweet)), time=str((time - datetime(1970,1,1)).total_seconds()), source='twitter'))
-				offset = 0
-				if lastpost < returned_posts:
-					break
-			max_id = tweets.max_id
+		try:
+			while True:
+				if max_id != None:
+					tweets = api.home_timeline(count=200, max_id=max_id)
+				else:
+					tweets = api.home_timeline(count=200)
+				returned_posts += len(tweets)															
+				if offset < returned_posts:
+					to =  (lastpost + 1) % len(tweets) if lastpost < returned_posts else len(tweets)
+					for j in range(offset % len(tweets), to):
+						tweet = tweets[j]
+						time = parser.parse(tweet.created_at)
+						# logging.info(time)
+						time = time.replace(tzinfo=None)
+						data.append(News(content=str(vars(tweet)), time=str((time - datetime(1970,1,1)).total_seconds()), source='twitter'))
+					offset = 0
+					if lastpost < returned_posts:
+						break
+				max_id = tweets.max_id
+		except tweepy.error.TweepError as e:
+			raise endpoints.BadRequestException(e.message[0]['message'])
 		return NewsCollection(feed=data)
 
 
