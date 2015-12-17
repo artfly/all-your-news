@@ -10,6 +10,8 @@ from protorpc import remote
 from google.appengine.ext import ndb
 import ast
 import json
+import endpoints
+import httplib
 import logging
 
 
@@ -36,7 +38,10 @@ class EmptyMessage(messages.Message):
 class TokenDB(ndb.Model):
 	token_key = ndb.StringProperty()
 	token_secret = ndb.StringProperty()
-	offset = ndb.IntegerProperty(default=0)
+
+class RawJsonParser(tweepy.parsers.Parser):
+    def parse(self, method, payload):
+        return payload
 
 
 @module_api.api_class(resource_name='users')
@@ -67,7 +72,8 @@ class UsersApi(remote.Service):
 
 
 	NEWS_METHOD_RESOURCE = endpoints.ResourceContainer(
-								userid=messages.IntegerField(1, required=True), count=messages.IntegerField(2, required=True))
+			userid=messages.IntegerField(1, required=True), count=messages.IntegerField(2, required=True),
+															since=messages.IntegerField(3, required=True))
 
 	@endpoints.method(NEWS_METHOD_RESOURCE, NewsCollection,
 						path='users/{userid}/news', http_method='GET', name='getNews')
@@ -76,52 +82,38 @@ class UsersApi(remote.Service):
 		if db_token is None:
 			raise endpoints.BadRequestException("No such user")
 		token = (db_token.token_key, db_token.token_secret)
-		offset = db_token.offset
+		since = request.since
 		count = request.count
 		max_id = None
-		lastpost = count + offset - 1
-		iterations = int(lastpost / 200) + 1
 		returned_posts = 0
+		taken = 0
 		data = []
 		auth = tweepy.OAuthHandler(self.CONSUMER_KEY, self.CONSUMER_SECRET)
 		auth.set_access_token(token[0], token[1])
-		api = tweepy.API(auth)
+		api = tweepy.API(auth_handler=auth, parser=RawJsonParser())
 		try:
 			while True:
 				if max_id != None:
 					tweets = api.home_timeline(count=200, max_id=max_id)
 				else:
 					tweets = api.home_timeline(count=200)
-				returned_posts += len(tweets)															
-				if offset < returned_posts:
-					to =  (lastpost + 1) % len(tweets) if lastpost < returned_posts else len(tweets)
-					for j in range(offset % len(tweets), to):
-						tweet = tweets[j]
-						time = parser.parse(tweet.created_at)
-						# logging.info(time)
-						time = time.replace(tzinfo=None)
-						data.append(News(content=str(vars(tweet)), time=str((time - datetime(1970,1,1)).total_seconds()), source='twitter'))
-					offset = 0
-					if lastpost < returned_posts:
-						break
-				max_id = tweets.max_id
+				tweets = json.loads(tweets)
+				for tweet in tweets:
+					if taken == count:
+						return NewsCollection(feed=data)
+					time = parser.parse(tweet['created_at']).replace(tzinfo=None)
+					time = str((time - datetime(1970,1,1)).total_seconds())
+					if time > since:
+						data.append(News(content=json.dumps(tweet), time=time, source='twitter'))
+						taken += 1
+				max_id = tweets[len(tweets) - 1]['id_str']
 		except tweepy.error.TweepError as e:
-			raise endpoints.BadRequestException(e.message[0]['message'])
+			logging.info(e.message)
+			# info = json.loads(e.message[0])
+			# logging.info(info)
+			raise endpoints.BadRequestException(e.message)
+		logging.info("here")
 		return NewsCollection(feed=data)
-
-
-	OFFSET_METHOD_RESOURCE = endpoints.ResourceContainer(
-								userid=messages.IntegerField(1, required=True), offset=messages.IntegerField(2, required=True))
-
-	@endpoints.method(OFFSET_METHOD_RESOURCE, EmptyMessage,
-						path='users/{userid}/offset', http_method='POST', name='postOffset')
-	def post_offset(self, request):
-		db_token = TokenDB.get_by_id(request.userid)
-		if db_token is None:
-			raise endpoints.BadRequestException("No such user")
-		db_token.offset = request.offset
-		db_token.put()
-		return EmptyMessage()
 
 
 APPLICATION = endpoints.api_server([UsersApi])

@@ -16,12 +16,13 @@ class ModuleFactory:
 			ModuleFactory.instance = ModuleFactory.__ModuleFactory()
 
 
-	def get_news(self, source, userid, count, offset):
+	def get_news(self, source, userid, count, since):
 		logging.info(source)
 		if source in self.modules.keys():
-			url = self.modules[source] + '/_ah/api/module/v1/users/{}/news?count={}'.format(userid, count)
+			url = self.modules[source] + '/_ah/api/module/v1/users/{}/news?count={}&since={}'
+			url = url.format(userid, count, since)
 			content = json.loads(urlfetch.fetch(url=url, method=urlfetch.GET).content)
-			# logging.info(str(content))
+			logging.info(str(content))
 			try:
 				feed = content['feed']
 			except KeyError:
@@ -36,6 +37,3 @@ class ModuleFactory:
 			# logging.info(str(payload))
 			headers = {'Content-Type': 'application/json'}
 			urlfetch.fetch(url=url, payload=json.dumps(payload), method=urlfetch.POST,headers=headers)
-
-
-	# def post_offset(self, source, userid, offset):				#TODO

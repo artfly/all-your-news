@@ -8,6 +8,7 @@ import password as pwd
 import json
 import module
 import logging
+import time
 
 
 ayn_api = endpoints.api(name='ayn', version='v1')
@@ -87,7 +88,7 @@ class UsersApi(remote.Service):
 		elif user.password != basic_auth:
 			raise endpoints.BadRequestException("Invalid password")
 		factory.post_token(request.source, request.token, request.userid)
-		if user.sources != request.source:
+		if request.source not in user.sources:
 			logging.info(user.sources)
 			logging.info(request.source)
 			user.sources.append(request.source)
@@ -95,7 +96,7 @@ class UsersApi(remote.Service):
 		return EmptyMessage()
 
 	NEWS_METHOD_RESOURCE = endpoints.ResourceContainer(count=messages.IntegerField(1, default=15),
-	 								offset=messages.IntegerField(2, default=0), userid=messages.IntegerField(3, required=True))
+	 								since=messages.IntegerField(2, default=0), userid=messages.IntegerField(3, required=True))
 
 	@endpoints.method(NEWS_METHOD_RESOURCE, NewsCollection,
 						path='users/{userid}/news', http_method='GET', name='getNews')
@@ -109,18 +110,16 @@ class UsersApi(remote.Service):
 		factory = module.ModuleFactory()
 		news_collection = NewsCollection(feed=[])
 		items = []
-		offsets = {}
+		since = request.since if request.since != 0 else int(time.time())
+		logging.info(request.count)
 		for source in user.sources:
-			offsets[source] = 0
-			feed = factory.get_news(source, request.userid, request.count, request.offset)
+			feed = factory.get_news(source, request.userid, request.count, since)
 			items.extend(feed)
 		items = sorted(items, key=itemgetter('time'), reverse=True)
 		items = items[:request.count]
 		for news in items:
 			n = News(source=news['source'], content=str(news['content']))
-			offsets[n.source] += 1
 			news_collection.feed.append(n)
-		# for source in user.sources:
 		return news_collection
 
 APPLICATION = endpoints.api_server([UsersApi])

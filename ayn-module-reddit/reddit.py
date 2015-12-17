@@ -33,7 +33,6 @@ class EmptyMessage(messages.Message):
 class TokenDB(ndb.Model):
 	refresh_token = ndb.StringProperty()
 	access_token = ndb.StringProperty()
-	offset = ndb.IntegerProperty(default=0)
 
 
 @module_api.api_class(resource_name='users')
@@ -77,8 +76,8 @@ class UsersApi(remote.Service):
 		return None
 
 	NEWS_METHOD_RESOURCE = endpoints.ResourceContainer(
-								userid=messages.IntegerField(1, required=True), count=messages.IntegerField(2, required=True))
-
+			userid=messages.IntegerField(1, required=True), count=messages.IntegerField(2, required=True),
+															since=messages.IntegerField(3, required=True))
 	@endpoints.method(NEWS_METHOD_RESOURCE, NewsCollection,
 						path='users/{userid}/news', http_method='GET', name='getNews')
 	def get_news(self, request):
@@ -86,15 +85,14 @@ class UsersApi(remote.Service):
 		if db_token is None:
 			raise endpoints.BadRequestException("No such user")
 		count = request.count
-		offset = db_token.offset
+		since = request.since
 		headers = {"Authorization" : "bearer " + db_token.access_token}
 		url = "https://oauth.reddit.com/.json"
-		lastpost = count + offset - 1
-		iterations = int(lastpost / 100) + 1
 		after = ''
 		data = []
 		params = {}
-		for i in range(0, iterations):
+		taken = 0
+		while True:
 			url = url + "?limit={}&after={}".format('100', after)
 			posts = urlfetch.fetch(url=url, headers=headers, method=urlfetch.GET).content
 			posts = json.loads(posts)
@@ -107,29 +105,15 @@ class UsersApi(remote.Service):
 				posts = urlfetch.fetch(url=url, headers=headers, method=urlfetch.GET).content								
 				posts = json.loads(posts)
 
-			if offset < 100 * (i + 1):
-				to = (lastpost + 1) if lastpost < 100 else 100
-				for j in range(offset % 100, to):
-					post = posts['data']['children'][j]
-					data.append(News(content=str(post), time=str(post['data']['created']), source='reddit'))
-				offset = 0
-			lastpost -= 100
+			logging.info(json.dumps(posts))
+			for post in posts['data']['children']:
+				if taken == count:
+					return NewsCollection(feed=data)
+				if since > post['data']['created_utc']:
+					data.append(News(content=str(post), time=str(post['data']['created_utc']), source='reddit'))
+					taken += 1
 			after = posts['data']['after']
 		return NewsCollection(feed=data)
-
-
-	OFFSET_METHOD_RESOURCE = endpoints.ResourceContainer(
-								userid=messages.IntegerField(1, required=True), offset=messages.IntegerField(2, required=True))
-
-	@endpoints.method(OFFSET_METHOD_RESOURCE, EmptyMessage,
-						path='users/{userid}/offset', http_method='POST', name='postOffset')
-	def post_offset(self, request):
-		db_token = TokenDB.get_by_id(request.userid)
-		if db_token is None:
-			raise endpoints.BadRequestException("No such user")
-		db_token.offset = request.offset
-		db_token.put()
-		return EmptyMessage()
 
 
 APPLICATION = endpoints.api_server([UsersApi])
