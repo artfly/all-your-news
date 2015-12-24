@@ -5,6 +5,7 @@ from datetime import datetime
 from dateutil import parser
 import endpoints
 from protorpc import remote
+from google.appengine.ext import ndb
 from ayn_module import BaseModuleApi
 import ayn_module
 import ast
@@ -40,7 +41,7 @@ class ModuleApi(BaseModuleApi):
 			token_secret = token['token_secret']
 			db_token = TokenDB.get_by_id(request.userid)
 			if db_token is None:
-				db_token = ayn_module.TokenDB(id=request.userid)
+				db_token = TokenDB(id=request.userid)
 			db_token.token_secret = token_secret
 			db_token.token_key = token_key
 			db_token.put()
