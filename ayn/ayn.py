@@ -6,7 +6,7 @@ from google.appengine.ext import ndb
 from operator import itemgetter
 import password as pwd
 import json
-import module
+import module_factory
 import logging
 import time
 
@@ -77,7 +77,7 @@ class UsersApi(remote.Service):
 	@endpoints.method(SOURCES_METHOD_RESOURCE, EmptyMessage,
 						path='users/{userid}/sources', http_method='POST', name='postSource')
 	def post_source(self, request):
-		factory = module.ModuleFactory()
+		factory = module_factory.ModuleFactory()
 		basic_auth = self.request_state.headers.get('authorization')
 		logging.info("basic oauth : " + str(basic_auth))
 		logging.info("request.userid : " + str(request.userid))
@@ -107,7 +107,7 @@ class UsersApi(remote.Service):
 			raise endpoints.BadRequestException("No such user")
 		elif user.password != basic_auth:
 			raise endpoints.BadRequestException("Invalid password")
-		factory = module.ModuleFactory()
+		factory = module_factory.ModuleFactory()
 		news_collection = NewsCollection(feed=[])
 		items = []
 		since = request.since if request.since != 0 else int(time.time())
