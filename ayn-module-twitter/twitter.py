@@ -15,6 +15,9 @@ import logging
 
 module_api = endpoints.api(name='module', version='v1')
 
+class TokenDB(ndb.Model):
+	token_key = ndb.StringProperty()
+	token_secret = ndb.StringProperty()
 
 class RawJsonParser(tweepy.parsers.Parser):
     def parse(self, method, payload):
@@ -35,7 +38,7 @@ class ModuleApi(BaseModuleApi):
 		if 'token_key' in token and 'token_secret' in token:
 			token_key = token['token_key']
 			token_secret = token['token_secret']
-			db_token = ayn_module.TokenDB.get_by_id(request.userid)
+			db_token = TokenDB.get_by_id(request.userid)
 			if db_token is None:
 				db_token = ayn_module.TokenDB(id=request.userid)
 			db_token.token_secret = token_secret
@@ -48,7 +51,7 @@ class ModuleApi(BaseModuleApi):
 	@endpoints.method(BaseModuleApi.NEWS_METHOD_RESOURCE, ayn_module.NewsCollection,
 						path='users/{userid}/news', http_method='GET', name='getNews')
 	def get_news(self, request):
-		db_token = ayn_module.TokenDB.get_by_id(request.userid)
+		db_token = TokenDB.get_by_id(request.userid)
 		if db_token is None:
 			raise endpoints.BadRequestException("No such user")
 		token = (db_token.token_key, db_token.token_secret)

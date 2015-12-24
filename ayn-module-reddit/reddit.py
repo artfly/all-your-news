@@ -13,6 +13,11 @@ import logging
 module_api = endpoints.api(name='module', version='v1')
 
 
+class TokenDB(ndb.Model):
+	refresh_token = ndb.StringProperty()
+	access_token = ndb.StringProperty()
+
+
 @module_api.api_class(resource_name='users')
 class ModuleApi(BaseModuleApi):
 	"""Users API v1"""
@@ -26,9 +31,9 @@ class ModuleApi(BaseModuleApi):
 		if 'access_token' in token and 'refresh_token' in token:
 			access_token = token['access_token']
 			refresh_token = token['refresh_token']
-			db_token = ayn_module.TokenDB.get_by_id(request.userid)
+			db_token = TokenDB.get_by_id(request.userid)
 			if db_token is None:
-				db_token = ayn_module.TokenDB(id=request.userid)
+				db_token = TokenDB(id=request.userid)
 			db_token.access_token = access_token
 			db_token.refresh_token = refresh_token
 			db_token.put()
@@ -53,7 +58,7 @@ class ModuleApi(BaseModuleApi):
 	@endpoints.method(BaseModuleApi.NEWS_METHOD_RESOURCE, ayn_module.NewsCollection,
 						path='users/{userid}/news', http_method='GET', name='getNews')
 	def get_news(self, request):
-		db_token = ayn_module.TokenDB.get_by_id(request.userid)
+		db_token = TokenDB.get_by_id(request.userid)
 		if db_token is None:
 			raise endpoints.BadRequestException("No such user")
 		count = request.count
