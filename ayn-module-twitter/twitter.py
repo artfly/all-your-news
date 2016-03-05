@@ -29,8 +29,8 @@ class RawJsonParser(tweepy.parsers.Parser):
 class ModuleApi(BaseModuleApi):
 	"""Module API v1"""
 
-	CONSUMER_KEY = 'pjBmdH8twx7RKX91CyBosaZOo'
-	CONSUMER_SECRET = 'UO7kzSoaGMflKsLWtolzmud7iSJRS0cyW0U3ID5ytmpdTSJl2f'
+	CONSUMER_KEY = ''
+	CONSUMER_SECRET = ''
 
 	@endpoints.method(BaseModuleApi.SOURCES_METHOD_RESOURCE, ayn_module.EmptyMessage,
 						path='users/{userid}/tokens', http_method='POST', name='postSource')

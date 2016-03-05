@@ -21,8 +21,8 @@ class TokenDB(ndb.Model):
 @module_api.api_class(resource_name='users')
 class ModuleApi(BaseModuleApi):
 	"""Users API v1"""
-	CLIENT_ID = 'LFBR3WSQCrOt6g'
-	CLIENT_SECRET = 'H35OVobtd4K0YKIl8StDffr4jm0'
+	CLIENT_ID = ''
+	CLIENT_SECRET = ''
 
 	@endpoints.method(BaseModuleApi.SOURCES_METHOD_RESOURCE, ayn_module.EmptyMessage,
 						path='users/{userid}/tokens', http_method='POST', name='postSource')
